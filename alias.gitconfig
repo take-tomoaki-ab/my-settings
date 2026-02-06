@@ -1,0 +1,8 @@
+[alias]
+  st = status
+  sw = switch
+  br = branch
+  co = checkout
+  com = commit
+  chp = cherry-pick
+  wt = worktree
