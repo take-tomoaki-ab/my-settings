@@ -99,6 +99,10 @@ agent-browser click @eN             # 操作したい要素をクリック
 agent-browser wait --load networkidle
 agent-browser get url               # 遷移後の URL を記録
 agent-browser snapshot -i           # 遷移後の状態を確認
+
+# スクロールが必要な場合（ページ全体を見せるデモなど）
+agent-browser scroll 0 500          # Y 方向に 500px スクロール（量はページ高さに合わせる）
+agent-browser wait 1000
 ```
 
 **確認後に記録すること**:
@@ -122,8 +126,8 @@ TS=$(date +%Y%m%d-%H%M%S)
 
 ### Step 5: agent-browser で録画する（Phase 2）
 
-**Agent tool のサブエージェントに委譲すること**。
-Step 3 で確認した ref・URL・操作順序をサブエージェントへの指示に含めること。
+**Step 3 で起動した同一サブエージェント（`browser-agent`）に SendMessage で継続指示を送ること**（新規サブエージェントは起動しない）。
+Step 3 で確認した ref・URL・操作順序をサブエージェントへの指示に含めること。Step 4 で生成した `TS` の値は文字列として SendMessage に埋め込む（シェル変数としてではなく、具体的な値 `20260422-143022` のように展開してから渡す）。
 
 ```bash
 # 録画開始
@@ -133,8 +137,9 @@ agent-browser set viewport 1280 720
 # ログイン（必要な場合）
 agent-browser open <LOGIN_URL>
 agent-browser wait --load networkidle
+agent-browser snapshot -i                 # open 後は ref が変わるため再取得（Step 3 の ref をそのまま使わない）
 agent-browser wait 500
-agent-browser fill @e1 "<USERNAME>"       # Step 3 で確認した ref を使う
+agent-browser fill @e1 "<USERNAME>"       # snapshot -i で取得した ref を使う
 agent-browser wait 300
 agent-browser fill @e2 "<PASSWORD>"
 agent-browser wait 300
@@ -146,7 +151,7 @@ agent-browser wait 800                    # ログイン完了を視覚的に見
 agent-browser open <TARGET_URL>
 agent-browser wait --load networkidle
 agent-browser wait 1000                   # ページが映るように待機
-agent-browser snapshot -i                 # 録画中に ref を再取得（ページ遷移後は必須）
+agent-browser snapshot -i                 # 録画中に ref を再取得（ページ遷移後、またはSPA でDOM更新後は必須）
 agent-browser click @eN
 agent-browser wait 800
 # ... 操作を続ける
@@ -181,7 +186,25 @@ ffmpeg -i .record/videos/<APP_NAME>-${TS}.webm -vf fps=1/5 .record/review/%03d.p
 - [ ] 動画全体を通して操作の流れが伝わるか
 - [ ] エラーオーバーレイ・エラーダイアログが表示されていないか
 
-**問題があった場合**: Step 5 のサブエージェントに修正指示を送り（SendMessage）、`agent-browser record restart` で撮り直す。
+**問題があった場合**: まずメインコンテキストで新しいタイムスタンプを生成し、その値を SendMessage に埋め込んでサブエージェントに撮り直しを指示する。
+
+```bash
+# メインコンテキストで実行してから SendMessage に値を埋め込む
+TS_NEW=$(date +%Y%m%d-%H%M%S)
+```
+
+SendMessage に含めるコマンド（`${TS_NEW}` は上で生成した具体的な値に置換して渡す）:
+
+```bash
+agent-browser record stop    # 前回録画が残っている場合に備えたリセット（既に停止済みでも安全）
+agent-browser close --all
+agent-browser record start .record/videos/<APP_NAME>-${TS_NEW}.webm
+# ... 再度ログイン〜デモ操作を繰り返す（open 後の snapshot -i も忘れずに）
+agent-browser record stop
+agent-browser close
+```
+
+撮り直し後は同じフレーム抽出手順（`ffmpeg` → Read で全フレームを確認）を再実施し、全項目 OK になったら Step 7 へ進む。
 **問題がなければ**: Step 7 へ進む。
 
 ### Step 7: 結果報告
@@ -210,14 +233,14 @@ ffmpeg -i .record/videos/<APP_NAME>-${TS}.webm -vf fps=1/5 .record/review/%03d.p
 グローバルルール（`~/.claude/CLAUDE.md`）に従い：
 
 1. 探索・録画の試行錯誤は必ず Agent tool のサブエージェントに委譲する
-2. サブエージェントには `name` を付与し（例: `browser-agent`）、撮り直しが必要な場合は `SendMessage` で継続指示を送る
+2. サブエージェントには `name` を付与し（例: `browser-agent`）、Step 5（録画）・Step 6（撮り直し）いずれも同一サブエージェントに `SendMessage`（`to: "browser-agent"` 形式）で継続指示を送る。新規サブエージェントを起動しない
 3. メインコンテキストには結果（成功/失敗、動画パス）だけ返させる
 
 ## 注意事項
 
 - `.record/` ディレクトリはプロジェクトルートに自動作成される
 - サーバーが起動していない場合はスキルを中断してユーザーに通知する
-- ページ遷移後は必ず `agent-browser snapshot -i` で ref を再取得すること（古い ref は無効）
+- ページ遷移後、および SPA で URL は変わらず DOM が更新されて新しい要素が追加された後も、必ず `agent-browser snapshot -i` で ref を再取得すること（古い ref は無効）
 - `.record/` を `.gitignore` に追加することを推奨する
 
 ## よくあるトラブル
