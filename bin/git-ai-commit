@@ -1,0 +1,75 @@
+#!/bin/bash
+# claude -p を使ってgit diffからコミットメッセージを生成する
+
+set -e
+
+usage() {
+    cat <<EOF
+Usage: git-ai-commit [options]
+
+Options:
+  -n, --dry-run   メッセージを表示するだけ（コミットしない）
+  -y, --yes       確認なしで即コミット
+  -h, --help      このヘルプを表示
+EOF
+}
+
+DO_COMMIT=true
+SKIP_CONFIRM=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -n|--dry-run) DO_COMMIT=false ;;
+        -y|--yes) DO_COMMIT=true; SKIP_CONFIRM=true ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+    esac
+    shift
+done
+
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "Error: git リポジトリ内で実行してください" >&2
+    exit 1
+fi
+
+DIFF=$(git diff --cached)
+
+if [ -z "$DIFF" ]; then
+    echo "Error: ステージされた変更がありません。git add してください" >&2
+    exit 1
+fi
+
+LOG=$(git log --oneline -5 2>/dev/null || echo "")
+
+PROMPT="あなたはgitのコミットメッセージの専門家です。以下のgit diffを分析して、適切なコミットメッセージを1行だけ生成してください。
+
+## ルール
+- 形式: <type>: <概要>
+- type は feat / fix / refactor / docs / test / chore / style / perf から選ぶ
+- 概要は日本語で簡潔に（50文字以内）
+- コミットメッセージのみを出力（説明・前置き・コードブロック不要）
+
+## 最近のコミット履歴（スタイルの参考）
+${LOG}
+
+## git diff
+${DIFF}"
+
+echo "Generating commit message..." >&2
+
+MESSAGE=$(claude -p "$PROMPT" --output-format text)
+
+echo "$MESSAGE"
+
+if [ "$DO_COMMIT" = true ]; then
+    if [ "$SKIP_CONFIRM" = false ]; then
+        echo "" >&2
+        printf "このメッセージでコミットしますか? [y/N] " >&2
+        read -r REPLY </dev/tty
+        if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+            echo "キャンセルしました" >&2
+            exit 0
+        fi
+    fi
+    git commit -m "$MESSAGE"
+fi

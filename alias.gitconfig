@@ -6,3 +6,6 @@
   com = commit
   chp = cherry-pick
   wt = worktree
+  aic = "!git-ai-commit"             # AI 生成 → 確認後コミット
+  aicn = "!git-ai-commit --dry-run"  # AI 生成 → 表示のみ
+  aicy = "!git-ai-commit --yes"      # AI 生成 → 即コミット
