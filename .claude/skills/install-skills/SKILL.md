@@ -1,12 +1,12 @@
 ---
 name: install-skills
-description: my-settings リポジトリにあるスキル・コマンド・エージェント・プラグインを、プロジェクトスコープまたはユーザースコープにインストールする。引数で `user` / `project` を指定してインストール先を切り替える。
+description: カレントディレクトリの `claude/` にあるスキル・コマンド・エージェント・プラグインを、ユーザースコープ（~/.claude/）またはプロジェクトスコープ（指定パスの .claude/）にインストールする。引数で `user` / `project` を指定してインストール先を切り替える。
 allowed-tools: Bash(ls:*), Bash(find:*), Bash(cp:*), Bash(mkdir:*), Bash(cat:*), Read, Write, Edit
 ---
 
 # install-skills スキル
 
-`my-settings` リポジトリにあるスキル・コマンド・エージェント・プラグインを別プロジェクトまたはユーザーレベルにインストールする。
+カレントディレクトリの `claude/` にあるスキル・コマンド・エージェント・プラグインを、ユーザーレベルまたは指定プロジェクトにインストールする。
 
 ## 呼び出し形式
 
@@ -21,7 +21,7 @@ allowed-tools: Bash(ls:*), Bash(find:*), Bash(cp:*), Bash(mkdir:*), Bash(cat:*),
 | `name` | インストールするアイテム名 | 一覧を表示して選択 |
 
 - `user`: ユーザーレベル (`~/.claude/`)
-- `project`: カレントディレクトリのプロジェクトレベル (`./.claude/`)
+- `project`: 指定したプロジェクトのプロジェクトレベル（パスはユーザーに確認する）
 
 ## インストール元
 
@@ -50,9 +50,18 @@ SOURCE_DIR="$(pwd)/claude"
 
 ### Step 2: 引数の解決
 
-**scope が未指定の場合**: ユーザーに `user` / `project` を確認する。
+**scope が未指定の場合**: 以下のフォーマットでユーザーに確認する。`project` を選んだ場合は続けてインストール先プロジェクトの絶対パスを確認する（例: `/path/to/my-project`）。
 
-**type が未指定の場合**: 以下を確認して利用可能なアイテムを種別ごとに一覧表示し、ユーザーに選択してもらう。
+```
+インストール先を選択してください。
+
+  user    : すべてのプロジェクトで利用可能 (~/.claude/)
+  project : 特定のプロジェクトのみで利用可能 (<PROJECT_PATH>/.claude/)
+
+user / project を入力してください:
+```
+
+**type が未指定の場合**: 以下を確認して利用可能なアイテムを種別ごとに一覧表示し、ユーザーに type を選択してもらう。**候補が 0 件の種別は表示しない。**
 
 ```bash
 # 利用可能アイテムの一覧取得
@@ -62,7 +71,31 @@ find "$SOURCE_DIR/agents"   -name "*.md"  2>/dev/null | xargs -I{} basename {} .
 find "$SOURCE_DIR/plugins"  -mindepth 1 -maxdepth 1 -type d 2>/dev/null | xargs -I{} basename {}
 ```
 
-**name が未指定の場合**: 指定された type の一覧を表示してユーザーに選択してもらう。
+表示フォーマット（種別を見出しにして配下にアイテムを箇条書き）:
+
+```
+インストールする種別を選択してください。
+
+skill:
+  - record-demo
+  - empirical-prompt-tuning
+
+plugin:
+  - figma
+
+種別を入力してください (skill / plugin):
+```
+
+**name が未指定の場合**: type 確定後に別ターンで、その種別のアイテム一覧を表示してユーザーに name を選択してもらう。
+
+```
+インストールする skill を選択してください。
+
+  - record-demo
+  - empirical-prompt-tuning
+
+名前を入力してください:
+```
 
 ### Step 3: インストール先パスの決定
 
@@ -72,30 +105,52 @@ find "$SOURCE_DIR/plugins"  -mindepth 1 -maxdepth 1 -type d 2>/dev/null | xargs 
 | `user` | command | `~/.claude/commands/<name>.md` |
 | `user` | agent | `~/.claude/agents/<name>.md` |
 | `user` | plugin | `~/.claude/plugins/<name>/` |
-| `project` | skill | `./.claude/skills/<name>/` |
-| `project` | command | `./.claude/commands/<name>.md` |
-| `project` | agent | `./.claude/agents/<name>.md` |
-| `project` | plugin | `./.claude/plugins/<name>/` |
+| `project` | skill | `<PROJECT_PATH>/.claude/skills/<name>/` |
+| `project` | command | `<PROJECT_PATH>/.claude/commands/<name>.md` |
+| `project` | agent | `<PROJECT_PATH>/.claude/agents/<name>.md` |
+| `project` | plugin | `<PROJECT_PATH>/.claude/plugins/<name>/` |
+
+`project` scope での `<PROJECT_PATH>` は Step 2 でユーザーに確認した絶対パスを使う。
 
 ### Step 4: インストール実行
+
+プレースホルダーの置換ルール:
+
+| プレースホルダー | 置換値 |
+|-----------------|--------|
+| `<type>` | `skills` / `commands` / `agents` / `plugins`（type の複数形ディレクトリ名） |
+| `<name>` | ユーザーが指定したアイテム名 |
+| `<インストール先ディレクトリ>` | Step 3 テーブルで決定した **フルパス**（例: `/Users/s28773/.claude/skills/record-demo`） |
 
 **skill / plugin の場合** (ディレクトリコピー):
 
 ```bash
-DEST_DIR="<インストール先ディレクトリ>"
+# 例: user scope, skill, record-demo
+DEST_DIR="$HOME/.claude/skills/record-demo"
 mkdir -p "$DEST_DIR"
-cp -r "$SOURCE_DIR/<type>/<name>/." "$DEST_DIR/"
+cp -r "$SOURCE_DIR/skills/record-demo/." "$DEST_DIR/"
 ```
 
 **command / agent の場合** (ファイルコピー):
 
 ```bash
-DEST_DIR="<インストール先ディレクトリ>"
+# 例: user scope, command, look-back
+DEST_DIR="$HOME/.claude/commands"
 mkdir -p "$DEST_DIR"
-cp "$SOURCE_DIR/<type>/<name>.md" "$DEST_DIR/<name>.md"
+cp "$SOURCE_DIR/commands/look-back.md" "$DEST_DIR/look-back.md"
 ```
 
-既にインストール先に同名のファイル/ディレクトリが存在する場合は、上書きして良いかユーザーに確認してから実行する。
+コピー前に既存ファイル/ディレクトリの有無を確認する:
+
+```bash
+# skill / plugin の場合
+test -d "$DEST_DIR" && echo "exists"
+
+# command / agent の場合
+test -f "$DEST_DIR/<name>.md" && echo "exists"
+```
+
+既に存在する場合は「`<name>` は既にインストール済みです。上書きしますか？ (y/N):」と確認してから実行する。
 
 ### Step 5: プラグインの追加設定 (plugin のみ)
 
@@ -103,22 +158,27 @@ plugin をインストールした場合、`settings.json` の `enabledPlugins` 
 
 対象の `settings.json` パスを決定する：
 - `user` scope: `~/.claude/settings.json`
-- `project` scope: `./.claude/settings.json`
+- `project` scope: `<PROJECT_PATH>/.claude/settings.json`（Step 2 で確認したインストール先プロジェクトのパス）
 
-`$SOURCE_DIR/plugins/<name>/.claude-plugin/plugin.json` を読み込み、`name` フィールドを取得してキー名にする。
+`$SOURCE_DIR/plugins/<name>/.claude-plugin/plugin.json` を読み込み、`name` フィールドと `marketplace` フィールドを取得する。
+
+`enabledPlugins` のキー形式: `"<plugin-name>@<marketplace>"`
+
+- `plugin.json` に `marketplace` フィールドがある場合: `"<name>@<marketplace>"` を使う
+- `plugin.json` に `marketplace` フィールドがない場合（ローカルプラグイン）: `"<name>@local"` を使う
 
 ```json
-// settings.json の enabledPlugins に追記するイメージ
+// settings.json の enabledPlugins に追記するイメージ（figma の場合）
 {
   "enabledPlugins": {
-    "<plugin-name>@<marketplace-or-local>": true
+    "figma@local": true
   }
 }
 ```
 
 `settings.json` が存在しない場合は新規作成する。既存の場合は `enabledPlugins` キーに追記する（既存のエントリは消さない）。
 
-> **注意**: `settings.json` の編集は Edit ツールを使い、既存の JSON 構造を壊さないよう慎重に行うこと。
+> **注意**: `settings.json` が既に存在する場合は Edit ツールで追記し、既存の JSON 構造を壊さないよう慎重に行うこと。ファイルが存在しない場合は Write ツールで新規作成する。
 
 ### Step 6: 結果報告
 
