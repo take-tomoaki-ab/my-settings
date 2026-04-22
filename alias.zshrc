@@ -1,0 +1,1 @@
+alias ccd="claude --dangerously-skip-permissions"
