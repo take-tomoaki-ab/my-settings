@@ -1,0 +1,9 @@
+{
+  "name": "figma",
+  "description": "FigmaデザインからReactコンポーネントを自動実装するプラグイン。View-Service分離、CSS Modules、Storybookを含む完全な実装を生成。",
+  "version": "1.0.0",
+  "author": {
+    "name": "MEP Team"
+  },
+  "keywords": ["figma", "react", "component", "ui", "design-to-code"]
+}
