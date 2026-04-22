@@ -1,0 +1,1 @@
+<!-- skills, command, agentsを指定されたプロジェクトスコープorユーザースコープにインストールするためのskill -->
