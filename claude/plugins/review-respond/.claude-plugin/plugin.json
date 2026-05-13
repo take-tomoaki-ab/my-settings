@@ -1,0 +1,9 @@
+{
+  "name": "review-respond",
+  "description": "PRのレビューコメントを確認し、コード修正または返信コメントで対応するプラグイン。レビュアー名・PR URL・コメントURL を引数に渡してフィルタリング可能。gh CLI を使用。",
+  "version": "1.0.0",
+  "author": {
+    "name": "take-tomoaki-ab"
+  },
+  "keywords": ["github", "pull-request", "review", "gh"]
+}
