@@ -50,7 +50,7 @@ SOURCE_DIR="$(pwd)/claude"
 
 ### Step 2: 引数の解決
 
-**scope が未指定の場合**: 以下のフォーマットでユーザーに確認する。`project` を選んだ場合は続けてインストール先プロジェクトの絶対パスを確認する（例: `/path/to/my-project`）。
+**scope が未指定の場合**: 以下のフォーマットでユーザーに確認する。
 
 ```
 インストール先を選択してください。
@@ -61,14 +61,22 @@ SOURCE_DIR="$(pwd)/claude"
 user / project を入力してください:
 ```
 
+`project` を選んだ場合は、**次のステップ（type 選択）に進む前に**インストール先プロジェクトの絶対パスを確認する:
+
+```
+インストール先プロジェクトの絶対パスを入力してください（例: /path/to/my-project）:
+```
+
+`scope` が引数で `project` と指定されていた場合も同様に、まずプロジェクトパスをユーザーに確認してから type 選択に進む。
+
 **type が未指定の場合**: 以下を確認して利用可能なアイテムを種別ごとに一覧表示し、ユーザーに type を選択してもらう。**候補が 0 件の種別は表示しない。**
 
 ```bash
-# 利用可能アイテムの一覧取得
-find "$SOURCE_DIR/skills"   -mindepth 1 -maxdepth 1 -type d 2>/dev/null | xargs -I{} basename {}
-find "$SOURCE_DIR/commands" -name "*.md"  2>/dev/null | xargs -I{} basename {} .md
-find "$SOURCE_DIR/agents"   -name "*.md"  2>/dev/null | xargs -I{} basename {} .md
-find "$SOURCE_DIR/plugins"  -mindepth 1 -maxdepth 1 -type d 2>/dev/null | xargs -I{} basename {}
+# 利用可能アイテムの一覧取得（アルファベット順にソート）
+find "$SOURCE_DIR/skills"   -mindepth 1 -maxdepth 1 -type d 2>/dev/null | xargs -I{} basename {} | sort
+find "$SOURCE_DIR/commands" -name "*.md"  2>/dev/null | xargs -I{} basename {} .md | sort
+find "$SOURCE_DIR/agents"   -name "*.md"  2>/dev/null | xargs -I{} basename {} .md | sort
+find "$SOURCE_DIR/plugins"  -mindepth 1 -maxdepth 1 -type d 2>/dev/null | xargs -I{} basename {} | sort
 ```
 
 表示フォーマット（種別を見出しにして配下にアイテムを箇条書き）:
@@ -86,7 +94,7 @@ plugin:
 種別を入力してください (skill / plugin):
 ```
 
-**name が未指定の場合**: type 確定後に別ターンで、その種別のアイテム一覧を表示してユーザーに name を選択してもらう。
+**name が未指定の場合**: type 選択後、**ユーザーが type を入力するまで待ってから**次の返答でその種別のアイテム一覧を表示し、name を選択してもらう。scope・type・name の3項目を同一返答内でまとめて聞かないこと（必ず1問1答で進める）。
 
 ```
 インストールする skill を選択してください。
@@ -150,7 +158,7 @@ test -d "$DEST_DIR" && echo "exists"
 test -f "$DEST_DIR/<name>.md" && echo "exists"
 ```
 
-既に存在する場合は「`<name>` は既にインストール済みです。上書きしますか？ (y/N):」と確認してから実行する。
+既に存在する場合は「`<name>` は既にインストール済みです。上書きしますか？ (y/N):」と確認してから実行する。N を選んだ場合は「インストールをキャンセルしました。」と伝えてスキルを終了する。
 
 ### Step 5: プラグインの追加設定 (plugin のみ)
 
@@ -184,13 +192,30 @@ plugin をインストールした場合、`settings.json` の `enabledPlugins` 
 
 インストール結果をユーザーに報告する：
 
+**skill / command / agent の場合**:
+
 ```
 ✅ インストール完了
 
-種別   : skill
-名前   : record-demo
-スコープ: user
+種別      : skill
+名前      : record-demo
+スコープ  : user
 インストール先: ~/.claude/skills/record-demo/
+```
+
+**plugin の場合**（settings.json 更新も含めて報告する）:
+
+```
+✅ インストール完了
+
+種別      : plugin
+名前      : figma
+スコープ  : project
+インストール先: /path/to/my-project/.claude/plugins/figma/
+
+settings.json 更新済み:
+  /path/to/my-project/.claude/settings.json
+  enabledPlugins に "figma@mep-plugins" を追記しました。
 ```
 
 失敗した場合はエラー内容と対処方法を明示する。
