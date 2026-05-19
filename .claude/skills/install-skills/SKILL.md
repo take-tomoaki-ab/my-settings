@@ -162,7 +162,9 @@ test -f "$DEST_DIR/<name>.md" && echo "exists"
 
 ### Step 5: プラグインの追加設定 (plugin のみ)
 
-plugin をインストールした場合、`settings.json` の `enabledPlugins` にエントリを追加する必要がある。
+plugin をインストールした場合、以下の設定が必要。
+
+#### 5-1: settings.json の enabledPlugins 更新
 
 対象の `settings.json` パスを決定する：
 - `user` scope: `~/.claude/settings.json`
@@ -175,18 +177,63 @@ plugin をインストールした場合、`settings.json` の `enabledPlugins` 
 - `plugin.json` に `marketplace` フィールドがある場合: `"<name>@<marketplace>"` を使う
 - `plugin.json` に `marketplace` フィールドがない場合（ローカルプラグイン）: `"<name>@local"` を使う
 
+`settings.json` が存在しない場合は新規作成する。既存の場合は `enabledPlugins` キーに追記する（既存のエントリは消さない）。
+
+> **注意**: `settings.json` が既に存在する場合は Edit ツールで追記し、既存の JSON 構造を壊さないよう慎重に行うこと。ファイルが存在しない場合は Write ツールで新規作成する。
+
+#### 5-2: `@local` プラグインの追加設定（plugin.json に marketplace フィールドがない場合のみ）
+
+`plugin.json` に `marketplace` フィールドがない場合、さらに以下の2つの設定が必要。
+
+**① extraKnownMarketplaces に `local` を追加**
+
+`settings.json` の `extraKnownMarketplaces` に `local` エントリがなければ追加する。`<CLAUDE_ROOT>` は scope に応じて決定する：
+
+- `user` scope: `~/.claude/`（絶対パス: `$HOME/.claude`）
+- `project` scope: `<PROJECT_PATH>/.claude/`
+
 ```json
-// settings.json の enabledPlugins に追記するイメージ（figma の場合）
-{
-  "enabledPlugins": {
-    "figma@local": true
+"extraKnownMarketplaces": {
+  "local": {
+    "source": {
+      "source": "directory",
+      "path": "<CLAUDE_ROOT>"
+    }
   }
 }
 ```
 
-`settings.json` が存在しない場合は新規作成する。既存の場合は `enabledPlugins` キーに追記する（既存のエントリは消さない）。
+**② marketplace.json の作成・更新**
 
-> **注意**: `settings.json` が既に存在する場合は Edit ツールで追記し、既存の JSON 構造を壊さないよう慎重に行うこと。ファイルが存在しない場合は Write ツールで新規作成する。
+`<CLAUDE_ROOT>/.claude-plugin/marketplace.json` を確認する。
+
+存在しない場合は新規作成する：
+
+```json
+{
+  "name": "local",
+  "version": "1.0.0",
+  "description": "Local plugins",
+  "owner": { "name": "<username>" },
+  "plugins": [
+    {
+      "name": "<name>",
+      "source": "./plugins/<name>",
+      "description": "<plugin.json の description フィールドの値>"
+    }
+  ]
+}
+```
+
+既に存在する場合は `plugins` 配列に追記する（既存エントリは消さない）：
+
+```json
+{
+  "name": "<name>",
+  "source": "./plugins/<name>",
+  "description": "<plugin.json の description フィールドの値>"
+}
+```
 
 ### Step 6: 結果報告
 
@@ -216,6 +263,18 @@ plugin をインストールした場合、`settings.json` の `enabledPlugins` 
 settings.json 更新済み:
   /path/to/my-project/.claude/settings.json
   enabledPlugins に "figma@mep-plugins" を追記しました。
+```
+
+`@local` の場合はさらに以下も報告する：
+
+```
+marketplace.json 更新済み:
+  ~/.claude/.claude-plugin/marketplace.json
+  plugins に "review-respond" を追記しました。
+
+extraKnownMarketplaces 更新済み:
+  ~/.claude/settings.json
+  "local" マーケットプレイスを追記しました。
 ```
 
 失敗した場合はエラー内容と対処方法を明示する。
