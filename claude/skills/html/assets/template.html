@@ -13,6 +13,8 @@
     --muted: #6b7280;
     --border: #e3e3e0;
     --accent: #2f6feb;
+    --hot: #c2410c;
+    --ok: #15803d;
     --code-bg: #f2f2ef;
     --mark: #fff3b8;
   }
@@ -24,6 +26,8 @@
       --muted: #9aa0a6;
       --border: #303237;
       --accent: #79a9ff;
+      --hot: #ff9d6b;
+      --ok: #6ee7a8;
       --code-bg: #26282c;
       --mark: #4a4320;
     }
@@ -116,6 +120,103 @@
   }
   th { background: var(--code-bg); font-weight: 600; white-space: nowrap; }
   mark { background: var(--mark); color: inherit; padding: 0 .2em; border-radius: 3px; }
+
+  /* --- 図 --- */
+  figure { margin: 2rem 0; }
+  figure.diagram {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.4rem 1.1rem 1rem;
+  }
+  /* 横スクロールは svg だけに効かせる。figure ごと包むと figcaption まで流れて読めなくなる */
+  .diagram__scroll { overflow-x: auto; }
+  /* min-width は viewBox の幅と揃える。小さくすると SP で縮小され、文字が 8px 台になって読めない */
+  figure svg { display: block; width: 100%; height: auto; min-width: 640px; }
+  figcaption {
+    margin-top: .8rem;
+    color: var(--muted);
+    font-size: .84rem;
+    line-height: 1.6;
+    text-align: center;
+  }
+
+  /* --- コールアウト --- */
+  .callout {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: .95rem 1.15rem;
+    margin: 1.4rem 0;
+  }
+  .callout--warn { border-left-color: var(--hot); }
+  .callout__label {
+    display: block;
+    margin-bottom: .35rem;
+    font-size: .72rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .callout > :last-child { margin-bottom: 0; }
+
+  /* --- バッジ --- */
+  .badge {
+    display: inline-block;
+    padding: .1rem .6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--code-bg);
+    color: var(--muted);
+    font-size: .74rem;
+    white-space: nowrap;
+  }
+  .badge--ok { color: var(--ok); border-color: currentColor; background: none; }
+  .badge--todo { color: var(--hot); border-color: currentColor; background: none; }
+
+  /* --- 比較カード --- */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+  }
+  .card h3 { margin: 0 0 .5rem; font-size: .95rem; }
+  .card > :last-child { margin-bottom: 0; }
+
+  /* --- 番号付きステップ --- */
+  .steps { list-style: none; counter-reset: step; padding-left: 0; margin: 1.4rem 0; }
+  .steps > li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 2.6rem;
+    margin: .9rem 0;
+  }
+  .steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: .2rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    display: grid;
+    place-items: center;
+    font-size: .8rem;
+    font-weight: 700;
+  }
+
+  /* --- 数値の強調 --- */
+  .stat { font-size: 1.55rem; font-weight: 650; letter-spacing: -.01em; }
   .tag {
     display: inline-block;
     background: var(--code-bg);
@@ -159,8 +260,44 @@
   <h2>調べたこと / 検討したこと</h2>
   <p>{{経緯。箇条書き・表・コードブロックを適宜使う}}</p>
 
+  <!-- 図: 仕組み・流れ・前後の差分など「文章から組み立て直さないと見えないもの」がある章に置く。
+       描き方と雛形は SKILL.md の「図を入れる」を参照。不要ならこの figure ごと削除する。
+       図を 2 つ置くときは marker の id を重複させないこと。 -->
+  <figure class="diagram">
+   <div class="diagram__scroll">
+    <svg viewBox="0 0 640 130" role="img" aria-label="{{図が示す主張を 1 文で}}">
+      <defs>
+        <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+        </marker>
+      </defs>
+
+      <rect x="10" y="35" width="150" height="60" rx="8" fill="none" stroke="currentColor" />
+      <text x="85" y="70" text-anchor="middle" font-size="13" fill="currentColor">{{起点}}</text>
+
+      <rect x="245" y="35" width="150" height="60" rx="8" fill="none" stroke="var(--accent)" stroke-width="2" />
+      <text x="320" y="70" text-anchor="middle" font-size="13" fill="var(--accent)">{{論点の中心}}</text>
+
+      <rect x="480" y="35" width="150" height="60" rx="8" fill="none" stroke="currentColor" />
+      <text x="555" y="70" text-anchor="middle" font-size="13" fill="currentColor">{{終点}}</text>
+
+      <line x1="160" y1="65" x2="238" y2="65" stroke="currentColor" marker-end="url(#arw)" />
+      <text x="199" y="54" text-anchor="middle" font-size="11" fill="currentColor">{{何が流れるか}}</text>
+
+      <line x1="395" y1="65" x2="473" y2="65" stroke="currentColor" marker-end="url(#arw)" />
+      <text x="434" y="54" text-anchor="middle" font-size="11" fill="currentColor">{{何が流れるか}}</text>
+    </svg>
+   </div>
+    <figcaption>{{この図が示していること}}</figcaption>
+  </figure>
+
   <h2>決定事項</h2>
-  <p>{{最終的にどうすると決めたか。決まっていないなら「未決」と書く}}</p>
+  <!-- 決定が 1 行で言えるなら callout に出す。未決なら callout--warn にして「未決」と書く。 -->
+  <div class="callout">
+    <span class="callout__label">決定</span>
+    <p>{{最終的にどうすると決めたか。決まっていないなら「未決」と書く}}</p>
+  </div>
 
   <h2>根拠</h2>
   <p>{{そう判断した理由。会話中に具体的な参照箇所が出ていれば file.ts:123 形式で示す。無ければ形式にこだわらず理由だけ書く}}</p>
