@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/s28773/Desktop/codes/hview/bin/hview hook user-prompt-submit",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/s28773/Desktop/codes/hview/bin/hview hook post-tool-use",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
