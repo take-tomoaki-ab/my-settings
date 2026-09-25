@@ -6,6 +6,7 @@
   VOICE_RECAP_MODEL  既定 gemini-3.8-flash-tts
   VOICE_RECAP_VOICE  既定 voice_q5fi42vgyamm（カスタムボイス "Japanese Female 1"）
   VOICE_RECAP_STYLE  読み上げスタイル指示（speech_metadata.style）
+  VOICE_RECAP_DIR    WAV の保存先。既定 ~/Music/voice-recap
 """
 import base64
 import json
@@ -80,9 +81,10 @@ def main() -> int:
         print(f"音声がレスポンスに含まれていません: {json.dumps(data)[:500]}", file=sys.stderr)
         return 1
 
-    out_dir = os.path.join(tempfile.gettempdir(), "voice-recap")
+    # 一時フォルダは macOS に掃除されるため、消えない場所に残す
+    out_dir = os.path.expanduser(os.environ.get("VOICE_RECAP_DIR", "~/Music/voice-recap"))
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"recap-{int(time.time())}.wav")
+    path = os.path.join(out_dir, f"recap-{time.strftime('%Y%m%d-%H%M%S')}.wav")
     with open(path, "wb") as f:
         f.write(base64.b64decode(audios[-1]["data"]))
 

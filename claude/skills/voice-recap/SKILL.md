@@ -25,9 +25,9 @@ allowed-tools: Bash(python3:*), Bash(~/.claude/skills/voice-recap/scripts/speak.
    RECAP
    ```
 
-   - スクリプトは Gemini TTS を叩いて WAV を保存し、`afplay` をバックグラウンドで起動して即終了する
+   - スクリプトは Gemini TTS を叩いて WAV を `~/Music/voice-recap` に保存し、`afplay` をバックグラウンドで起動して即終了する
    - 成功すると保存先 WAV のパスを 1 行出力する
-3. ユーザーへの返答は、台本の本文と「再生したよ」程度の一言だけにする。WAV のパスは失敗時の調査用なので、聞かれない限り出さない
+3. ユーザーへの返答は、台本の本文と「再生したよ」程度の一言だけにする。WAV のパスは聞かれない限り出さない
 
 ## 台本の規範
 
@@ -61,3 +61,4 @@ allowed-tools: Bash(python3:*), Bash(~/.claude/skills/voice-recap/scripts/speak.
 | `VOICE_RECAP_MODEL` | `gemini-3.8-flash-tts` | TTS モデル |
 | `VOICE_RECAP_VOICE` | `voice_q5fi42vgyamm` | 声の ID。既定はカスタムボイス「Japanese Female 1」（2027-09-24 に期限切れ）。プリセットなら `leda` など |
 | `VOICE_RECAP_STYLE` | 明るいギャル調の指示 | 読み上げスタイル（`speech_metadata.style`） |
+| `VOICE_RECAP_DIR` | `~/Music/voice-recap` | WAV の保存先。スクリプトは消さないので、不要になったら手で消す |
