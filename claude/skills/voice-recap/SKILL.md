@@ -1,12 +1,13 @@
 ---
 name: voice-recap
-description: 1 ターン前の Claude の回答をギャル口調で短く要約し、Gemini TTS（gemini-3.8-flash-tts）で音声化してスピーカーで読み上げる。「/voice-recap」「今の読み上げて」「さっきの要約を音声で」などで起動する。
+description: 1 ターン前の Claude の回答をギャル口調で短く要約し、Gemini TTS（gemini-3.8-flash-tts）で音声化して、デスクトップの常駐アバター（DesktopAvatar）に口パクと表情つきで喋らせる。「/voice-recap」「今の読み上げて」「さっきの要約を音声で」などで起動する。
 allowed-tools: Bash(python3:*), Bash(~/.claude/skills/voice-recap/scripts/speak.py:*)
 ---
 
 # voice-recap スキル
 
-直前のやり取りを、耳で聞いて分かる長さの要約にして読み上げる。
+直前のやり取りを、耳で聞いて分かる長さの要約にして、常駐アバターに喋らせる。
+アバター本体は別リポジトリ `~/Desktop/codes/desktop-avatar`（`make install` で `~/Applications/DesktopAvatar.app` に入る）。
 
 ## 対象
 
@@ -25,9 +26,10 @@ allowed-tools: Bash(python3:*), Bash(~/.claude/skills/voice-recap/scripts/speak.
    RECAP
    ```
 
-   - スクリプトは Gemini TTS を叩いて WAV を `~/Music/voice-recap` に保存し、`afplay` をバックグラウンドで起動して即終了する
+   - スクリプトは表情タグを除いた本文で Gemini TTS を叩き、WAV を `~/Music/voice-recap` に保存する。そのあと WAV と表情タイムラインをアバターに渡して即終了する（アバターが起動していなければ起動する）
+   - アバターが入っていない、または応答しないときは、標準エラーに理由を 1 行出して `afplay` で再生する
    - 成功すると保存先 WAV のパスを 1 行出力する
-3. ユーザーへの返答は、台本の本文と「再生したよ」程度の一言だけにする。WAV のパスは聞かれない限り出さない
+3. ユーザーへの返答は、台本の本文（表情タグを除いたもの）と「再生したよ」程度の一言だけにする。WAV のパスは聞かれない限り出さない
 
 ## 台本の規範
 
@@ -38,6 +40,25 @@ allowed-tools: Bash(python3:*), Bash(~/.claude/skills/voice-recap/scripts/speak.
 - 主張・数値・ファイル名・コマンド名の正確さは元の回答と同じ基準を守る。要約で話を盛らない
 - コードブロック、URL、長いパスは読み上げない。「`claude/skills` の下にファイルを 2 つ作った」のように言い換える
 - 記号（`→`、`/`、`*`、表、箇条書き記号）は使わない。耳で聞いて通じる文章にする
+
+### 表情タグ
+
+- 段落や文の頭に `[表情: 笑顔]` のようにタグを書くと、そこから次のタグまでアバターがその表情になる。タグの無い冒頭は「通常」
+- 使える表情と使い分け（キャラクター設定は desktop-avatar の `character/CHARACTER.md`）
+
+  | 表情 | 使う場面 |
+  | --- | --- |
+  | 通常 | 説明全般 |
+  | 笑顔 | 成功・オチ |
+  | ドヤ | 結論・うまくいった時 |
+  | 驚き | 予想外の結果 |
+  | ジト目 | やらかしにツッコむ |
+  | 困り | 失敗・詰まった時 |
+  | 考え中 | 問いかけ・前振り |
+  | 照れ | 褒められた時 |
+
+- 1 本の台本で表情を変えるのは 2〜4 回までにする。文ごとに変えると顔がせわしなく見える
+- タグは読み上げられないので、文の一部として当てにしない
 
 ### 口調（ギャル）
 
@@ -52,6 +73,7 @@ allowed-tools: Bash(python3:*), Bash(~/.claude/skills/voice-recap/scripts/speak.
 - `GEMINI_API_KEY が未設定です`: 環境変数 `GEMINI_API_KEY` の設定をユーザーに案内する
 - `Gemini API エラー 4xx/5xx`: エラー本文を要約して伝える。モデル名が原因なら `VOICE_RECAP_MODEL` で差し替えられることを伝える
 - 音声が含まれていない: レスポンス冒頭を添えて伝える
+- `アバターを使わず afplay で再生します（…）`: 音声は流れているので、失敗扱いにはしない。理由が「DesktopAvatar.app が入っていない」なら、desktop-avatar で `make install` を実行するよう一言添える
 
 ## 設定（環境変数）
 
@@ -62,3 +84,4 @@ allowed-tools: Bash(python3:*), Bash(~/.claude/skills/voice-recap/scripts/speak.
 | `VOICE_RECAP_VOICE` | `voice_q5fi42vgyamm` | 声の ID。既定はカスタムボイス「Japanese Female 1」（2027-09-24 に期限切れ）。プリセットなら `leda` など |
 | `VOICE_RECAP_STYLE` | 明るいギャル調の指示 | 読み上げスタイル（`speech_metadata.style`） |
 | `VOICE_RECAP_DIR` | `~/Music/voice-recap` | WAV の保存先。スクリプトは消さないので、不要になったら手で消す |
+| `VOICE_RECAP_AVATAR` | `1` | `0` にするとアバターを使わず `afplay` で再生する |
