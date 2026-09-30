@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""標準入力のテキストを Gemini TTS で音声化し、アバター（DesktopAvatar）に喋らせる。
+"""標準入力のテキストを TTS で音声化し、アバター（DesktopAvatar）に喋らせる。
 
+TTS はローカルの Irodori-TTS（既定）か Gemini TTS を選べる。Irodori-TTS は常駐サーバ
+（irodori_server.py）に依頼し、サーバが居なければ起動する。
 台本中の `[表情: ジト目]` のようなタグは TTS に渡さず、表情タイムラインに変換してアバターに送る。
 アバターに繋がらなければ afplay で再生する。
 
 環境変数:
-  GEMINI_API_KEY   必須
+  VOICE_RECAP_ENGINE irodori（既定）か gemini
+  VOICE_RECAP_IRODORI_DIR  Irodori-TTS の clone 先。既定 ~/Desktop/codes/Irodori-TTS
+  GEMINI_API_KEY   gemini のとき必須
   VOICE_RECAP_MODEL  既定 gemini-3.8-flash-tts
   VOICE_RECAP_VOICE  既定 voice_q5fi42vgyamm（カスタムボイス "Japanese Female 1"）
   VOICE_RECAP_STYLE  読み上げスタイル指示（speech_metadata.style）
@@ -32,6 +36,9 @@ DEFAULT_STYLE = (
 )
 AVATAR_SOCK = os.path.expanduser("~/Library/Application Support/desktop-avatar/avatar.sock")
 AVATAR_APP = os.path.expanduser("~/Applications/DesktopAvatar.app")
+IRODORI_SOCK = os.path.expanduser("~/Library/Application Support/voice-recap/irodori.sock")
+IRODORI_LOG = os.path.expanduser("~/Library/Logs/voice-recap/irodori.log")
+SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 
 EXPRESSIONS = {
     "通常": "normal", "笑顔": "smile", "ドヤ": "smug", "驚き": "surprised",
@@ -139,16 +146,11 @@ def play_on_avatar(path: str, tl: list[dict]) -> str | None:
     return None
 
 
-def main() -> int:
+def synth_gemini(text: str, path: str) -> str | None:
+    """Gemini TTS で path に WAV を書く。失敗したら理由を返す。"""
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
-        print("GEMINI_API_KEY が未設定です", file=sys.stderr)
-        return 2
-    text, marks = parse_script(sys.stdin.read())
-    if not text:
-        print("読み上げるテキストが空です", file=sys.stderr)
-        return 2
-
+        return "GEMINI_API_KEY が未設定です"
     body = {
         "model": os.environ.get("VOICE_RECAP_MODEL", "gemini-3.8-flash-tts"),
         "input": [{
@@ -181,12 +183,10 @@ def main() -> int:
     finally:
         os.unlink(body_path)
     if res.returncode != 0:
-        print(f"curl エラー: {res.stderr.strip()}", file=sys.stderr)
-        return 1
+        return f"curl エラー: {res.stderr.strip()}"
     payload, _, status = res.stdout.rpartition("\n")
     if status != "200":
-        print(f"Gemini API エラー {status}: {payload[:1000]}", file=sys.stderr)
-        return 1
+        return f"Gemini API エラー {status}: {payload[:1000]}"
     data = json.loads(payload)
 
     audios = [
@@ -194,16 +194,94 @@ def main() -> int:
         for c in s.get("content", []) if c.get("type") == "audio"
     ]
     if not audios:
-        print(f"音声がレスポンスに含まれていません: {json.dumps(data)[:500]}", file=sys.stderr)
-        return 1
+        return f"音声がレスポンスに含まれていません: {json.dumps(data)[:500]}"
+
+    with open(path, "wb") as f:
+        f.write(base64.b64decode(audios[-1]["data"]))
+    return None
+
+
+def irodori_request(msg: dict, timeout: float) -> dict | None:
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            s.connect(IRODORI_SOCK)
+            s.sendall((json.dumps(msg, ensure_ascii=False) + "\n").encode())
+            buf = b""
+            while b"\n" not in buf:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                buf += chunk
+        return json.loads(buf.decode() or "{}")
+    except (OSError, ValueError):
+        return None
+
+
+def start_irodori() -> str | None:
+    """常駐サーバを起動し、ソケットが開くまで待つ。失敗したら理由を返す。"""
+    irodori_dir = os.path.expanduser(os.environ.get("VOICE_RECAP_IRODORI_DIR", "~/Desktop/codes/Irodori-TTS"))
+    python = os.path.join(irodori_dir, ".venv", "bin", "python")
+    if not os.path.isfile(python):
+        return f"Irodori-TTS の環境が見つからない（{python}）"
+    os.makedirs(os.path.dirname(IRODORI_LOG), exist_ok=True)
+    with open(IRODORI_LOG, "ab") as log:
+        proc = subprocess.Popen([python, os.path.join(SCRIPTS, "irodori_server.py")], cwd=irodori_dir,
+                                stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    # 初回はモデルのダウンロードが入るので長めに待つ
+    deadline = time.time() + 600
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            with open(IRODORI_LOG, errors="replace") as f:
+                tail = f.read().strip().splitlines()[-1:]
+            return f"Irodori-TTS サーバが終了した: {tail[0] if tail else '?'}（ログ {IRODORI_LOG}）"
+        if os.path.exists(IRODORI_SOCK):
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                    s.connect(IRODORI_SOCK)
+                return None
+            except OSError:
+                pass
+        time.sleep(0.5)
+    return f"Irodori-TTS サーバが起動しない（ログ {IRODORI_LOG}）"
+
+
+def synth_irodori(text: str, path: str) -> str | None:
+    """Irodori-TTS の常駐サーバで path に WAV を書く。失敗したら理由を返す。"""
+    msg = {"text": text, "out": path}
+    r = irodori_request(msg, timeout=300)
+    if r is None:
+        reason = start_irodori()
+        if reason:
+            return reason
+        r = irodori_request(msg, timeout=300)
+    if r is None:
+        return "Irodori-TTS サーバが応答しない"
+    if not r.get("ok"):
+        return f"Irodori-TTS エラー: {r.get('error', r)}"
+    return None
+
+
+def main() -> int:
+    engine = os.environ.get("VOICE_RECAP_ENGINE", "irodori")
+    if engine not in ("irodori", "gemini"):
+        print(f"VOICE_RECAP_ENGINE は irodori か gemini: {engine}", file=sys.stderr)
+        return 2
+    text, marks = parse_script(sys.stdin.read())
+    if not text:
+        print("読み上げるテキストが空です", file=sys.stderr)
+        return 2
 
     # 一時フォルダは macOS に掃除されるため、消えない場所に残す
     out_dir = os.path.expanduser(os.environ.get("VOICE_RECAP_DIR", "~/Music/voice-recap"))
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"recap-{time.strftime('%Y%m%d-%H%M%S')}.wav")
-    with open(path, "wb") as f:
-        f.write(base64.b64decode(audios[-1]["data"]))
-
+    # Irodori の出力を参照ボイスの作り直しに混ぜないよう、名前で見分けられるようにする
+    suffix = "-irodori" if engine == "irodori" else ""
+    path = os.path.join(out_dir, f"recap-{time.strftime('%Y%m%d-%H%M%S')}{suffix}.wav")
+    err = (synth_irodori if engine == "irodori" else synth_gemini)(text, path)
+    if err:
+        print(err, file=sys.stderr)
+        return 1
     reason = "VOICE_RECAP_AVATAR=0"
     if os.environ.get("VOICE_RECAP_AVATAR", "1") != "0":
         duration, pause_ends = analyze(path)
