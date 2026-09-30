@@ -98,6 +98,9 @@ class Server:
             pieces.append(torch.zeros(int(sr * GAP_SEC)))
         if not pieces:
             raise ValueError("読み上げるテキストが空")
+        # MPS は使い終わった領域を抱えたままにするので、依頼ごとに返す（放っておくと 10 GB を超える）
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
         audio = torch.cat(pieces[:-1]).clamp(-1, 1)
         pcm = (audio * 32767).round().to(torch.int16).numpy().tobytes()
         tmp = out + ".part"
@@ -135,6 +138,8 @@ def main() -> int:
     server = Server()
     # 1 回空打ちして、初回依頼の待ち時間（デバイスのウォームアップ）を減らす
     server.runtime.synthesize(SamplingRequest(text="あ。", ref_latent=server.ref, seed=0))
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
 
     os.makedirs(os.path.dirname(SOCK), exist_ok=True)
     if os.path.exists(SOCK):
